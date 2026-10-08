@@ -98,14 +98,16 @@ CREATE TABLE IF NOT EXISTS etl_antam.migration_target_config (
   tgt_schema       varchar(100) NOT NULL DEFAULT 'public',
   tgt_table        varchar(200) NOT NULL,
   pk_columns       varchar(500) NOT NULL,
-  mapping_sql      text NOT NULL,              -- SQL Template INSERT INTO target SELECT ... FROM staging
-  rollback_sql     text,                       -- SQL Template DELETE presisi untuk rollback
+  mapping_sql      text,                       -- SQL Template INSERT INTO target (otomatis di-generate/refresh)
+  rollback_sql     text,                       -- SQL Template DELETE presisi untuk rollback (otomatis)
   precheck_sql     text,
   postcheck_sql    text,
   is_active        boolean NOT NULL DEFAULT true,
   CONSTRAINT uq_migration_target_config_table UNIQUE (config_id, tgt_schema, tgt_table)
 );
 ALTER TABLE etl_antam.migration_target_config ADD COLUMN IF NOT EXISTS rollback_sql text;
+ALTER TABLE etl_antam.migration_target_config ALTER COLUMN mapping_sql DROP NOT NULL;
+ALTER TABLE etl_antam.migration_target_config ALTER COLUMN rollback_sql DROP NOT NULL;
 
 -- 1.6 Tabel Kamus Lookup Konversi Kode
 CREATE TABLE IF NOT EXISTS etl_antam.migration_lookup (
@@ -498,6 +500,10 @@ BEGIN
       EXECUTE format('ALTER TABLE stg_antam.%I ADD COLUMN IF NOT EXISTS %I text', v_stg_tbl, v_src);
     END IF;
   END LOOP;
+
+  -- Refresh auto mapping SQL & rollback SQL untuk target-target dari config ini
+  PERFORM etl_antam.fn_refresh_target_mapping_sql(p_cfg);
+
   RETURN 0;
 EXCEPTION WHEN OTHERS THEN
   GET STACKED DIAGNOSTICS v_det = PG_EXCEPTION_DETAIL;
@@ -773,6 +779,188 @@ END $$;
 -- =====================================================================
 -- [SECTION 4] FLOW 2: MULTI-TARGET POST & SAFE ROLLBACK ENGINE
 -- =====================================================================
+
+-- 4.0 Auto Generator & Trigger Mapping/Rollback SQL
+CREATE OR REPLACE FUNCTION etl_antam.fn_build_target_mapping_sql(
+  p_config_id int,
+  p_tgt_schema varchar,
+  p_tgt_table varchar,
+  p_pk_columns varchar,
+  OUT out_mapping_sql text,
+  OUT out_rollback_sql text
+)
+RETURNS record
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_cfg etl_antam.migration_config%ROWTYPE;
+  v_stg_schema varchar := 'stg_antam';
+  v_stg_table varchar;
+  v_stg_ref_schema varchar;
+  v_stg_ref_table varchar;
+  v_cols text;
+  v_pk_cond_tgt_stg text := '';
+  v_pk_cond_exists text := '';
+  v_pk_arr text[];
+  v_pk text;
+  v_has_stg boolean;
+  v_has_vendor_ref boolean := false;
+BEGIN
+  SELECT * INTO v_cfg FROM etl_antam.migration_config WHERE config_id = p_config_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Config ID % tidak ditemukan di migration_config', p_config_id;
+  END IF;
+
+  v_stg_table := CASE WHEN v_cfg.stg_table LIKE '%_src' THEN v_cfg.stg_table ELSE v_cfg.stg_table || '_src' END;
+
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.tables 
+    WHERE table_schema = v_stg_schema AND table_name = v_stg_table
+  ) INTO v_has_stg;
+
+  IF v_has_stg THEN
+    v_stg_ref_schema := v_stg_schema;
+    v_stg_ref_table  := v_stg_table;
+  ELSE
+    v_stg_ref_schema := v_cfg.tgt_schema;
+    v_stg_ref_table  := v_cfg.tgt_table;
+  END IF;
+
+  SELECT string_agg(quote_ident(c.column_name), ', ' ORDER BY c.ordinal_position)
+    INTO v_cols
+    FROM information_schema.columns c
+   WHERE c.table_schema = p_tgt_schema 
+     AND c.table_name   = p_tgt_table
+     AND EXISTS (
+       SELECT 1 FROM information_schema.columns s
+        WHERE s.table_schema = v_stg_ref_schema
+          AND s.table_name   = v_stg_ref_table
+          AND s.column_name  = c.column_name
+     );
+
+  IF v_cols IS NULL OR v_cols = '' THEN
+    RAISE EXCEPTION 'Tidak ada kolom yang cocok antara %.% dan %.%', 
+      p_tgt_schema, p_tgt_table, v_stg_ref_schema, v_stg_ref_table;
+  END IF;
+
+  v_pk_arr := string_to_array(COALESCE(NULLIF(btrim(p_pk_columns), ''), 'id'), ',');
+  FOR i IN 1..array_length(v_pk_arr, 1) LOOP
+    v_pk := btrim(v_pk_arr[i]);
+    IF i > 1 THEN
+      v_pk_cond_tgt_stg := v_pk_cond_tgt_stg || ' AND ';
+    END IF;
+    v_pk_cond_tgt_stg := v_pk_cond_tgt_stg || format('t.%I = s.%I', v_pk, v_pk);
+  END LOOP;
+
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+     WHERE table_schema = p_tgt_schema AND table_name = p_tgt_table AND column_name = 'vendor_reference_id'
+  ) AND EXISTS (
+    SELECT 1 FROM information_schema.columns 
+     WHERE table_schema = v_stg_ref_schema AND table_name = v_stg_ref_table AND column_name = 'vendor_reference_id'
+  ) INTO v_has_vendor_ref;
+
+  IF v_has_vendor_ref THEN
+    v_pk_cond_exists := format('(%s OR (s.vendor_reference_id IS NOT NULL AND t.vendor_reference_id = s.vendor_reference_id))', v_pk_cond_tgt_stg);
+  ELSE
+    v_pk_cond_exists := v_pk_cond_tgt_stg;
+  END IF;
+
+  out_mapping_sql := format(
+$sql$INSERT INTO %I.%I (
+  %s
+)
+SELECT 
+  %s
+FROM %I.%I s
+WHERE NOT EXISTS (
+  SELECT 1 FROM %I.%I t 
+  WHERE %s
+)$sql$,
+    p_tgt_schema, p_tgt_table,
+    v_cols,
+    v_cols,
+    v_stg_schema, v_stg_table,
+    p_tgt_schema, p_tgt_table,
+    v_pk_cond_exists
+  );
+
+  out_rollback_sql := format(
+$sql$DELETE FROM %I.%I t
+WHERE EXISTS (
+  SELECT 1 FROM %I.%I s
+  WHERE %s
+)$sql$,
+    p_tgt_schema, p_tgt_table,
+    v_stg_schema, v_stg_table,
+    v_pk_cond_exists
+  );
+END;
+$$;
+
+-- 4.0b Refresh Auto Mapping SQL & Rollback SQL per Config ID
+CREATE OR REPLACE FUNCTION etl_antam.fn_refresh_target_mapping_sql(p_config_id int)
+RETURNS int
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  r record;
+  v_res record;
+  v_count int := 0;
+BEGIN
+  FOR r IN 
+    SELECT target_config_id, config_id, tgt_schema, tgt_table, pk_columns
+      FROM etl_antam.migration_target_config
+     WHERE config_id = p_config_id AND is_active = true
+     ORDER BY exec_order
+  LOOP
+    SELECT * INTO v_res 
+      FROM etl_antam.fn_build_target_mapping_sql(r.config_id, r.tgt_schema, r.tgt_table, r.pk_columns);
+
+    UPDATE etl_antam.migration_target_config
+       SET mapping_sql  = v_res.out_mapping_sql,
+           rollback_sql = v_res.out_rollback_sql
+     WHERE target_config_id = r.target_config_id;
+
+    v_count := v_count + 1;
+  END LOOP;
+
+  RETURN v_count;
+END;
+$$;
+
+-- 4.0c Trigger Function untuk Auto-Populate mapping_sql dan rollback_sql
+CREATE OR REPLACE FUNCTION etl_antam.trg_fn_auto_mapping_target_config()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_res record;
+BEGIN
+  IF NEW.mapping_sql IS NULL OR btrim(NEW.mapping_sql) IN ('', 'tes')
+     OR NEW.rollback_sql IS NULL OR btrim(NEW.rollback_sql) IN ('', 'tes') THEN
+      
+    SELECT * INTO v_res 
+      FROM etl_antam.fn_build_target_mapping_sql(NEW.config_id, NEW.tgt_schema, NEW.tgt_table, NEW.pk_columns);
+
+    IF NEW.mapping_sql IS NULL OR btrim(NEW.mapping_sql) IN ('', 'tes') THEN
+      NEW.mapping_sql := v_res.out_mapping_sql;
+    END IF;
+
+    IF NEW.rollback_sql IS NULL OR btrim(NEW.rollback_sql) IN ('', 'tes') THEN
+      NEW.rollback_sql := v_res.out_rollback_sql;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_auto_mapping_target_config ON etl_antam.migration_target_config;
+CREATE TRIGGER trg_auto_mapping_target_config
+BEFORE INSERT OR UPDATE ON etl_antam.migration_target_config
+FOR EACH ROW
+EXECUTE FUNCTION etl_antam.trg_fn_auto_mapping_target_config();
 
 -- 4.1 Post Target Dispatcher (Per Target Config)
 CREATE OR REPLACE FUNCTION etl_antam.fn_post_target_dispatch(
