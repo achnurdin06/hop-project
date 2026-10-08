@@ -1,0 +1,138 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<workflow>
+  <name>wf_rollback_targets</name>
+  <name_sync_with_filename>Y</name_sync_with_filename>
+  <description>Rollback data yang ter-post di tabel-tabel target berdasarkan stg_&lt;stg_table&gt;_src</description>
+  <extended_description />
+  <created_user>-</created_user>
+  <created_date>2026/10/06 20:54:00.000</created_date>
+  <modified_user>-</modified_user>
+  <modified_date>2026/10/06 20:54:00.000</modified_date>
+  <workflow_version />
+  <parameters>
+    <parameter>
+      <name>CONFIG_ID</name>
+      <description>ID konfigurasi migrasi</description>
+      <default_value />
+    </parameter>
+    <parameter>
+      <name>RUN_ID</name>
+      <description>Run ID sesi migrasi</description>
+      <default_value />
+    </parameter>
+    <parameter>
+      <name>TARGET_RUN_ID</name>
+      <description>Target Run ID (opsional legacy)</description>
+      <default_value />
+    </parameter>
+  </parameters>
+  <actions>
+    <action>
+      <repeat>N</repeat>
+      <schedulerType>0</schedulerType>
+      <intervalSeconds>0</intervalSeconds>
+      <intervalMinutes>60</intervalMinutes>
+      <DayOfMonth>1</DayOfMonth>
+      <weekDay>1</weekDay>
+      <minutes>0</minutes>
+      <hour>12</hour>
+      <doNotWaitOnFirstExecution>N</doNotWaitOnFirstExecution>
+      <name>Start</name>
+      <description />
+      <type>SPECIAL</type>
+      <attributes />
+      <xloc>100</xloc>
+      <yloc>100</yloc>
+      <parallel>N</parallel>
+      <attributes_hac />
+    </action>
+    <action>
+      <add_rows_result>N</add_rows_result>
+      <clear_result_rows>Y</clear_result_rows>
+      <is_usevars>Y</is_usevars>
+      <is_custom_sql>Y</is_custom_sql>
+      <custom_sql>SELECT 1 WHERE etl_antam.fn_rollback_all_targets(${RUN_ID}, ${CONFIG_ID}) = 0</custom_sql>
+      <connection>PG_TGT</connection>
+      <tablename />
+      <schemaname />
+      <limit>1</limit>
+      <success_condition>rows_count_equal</success_condition>
+      <name>Rollback Multi-Targets</name>
+      <description />
+      <type>EVAL_TABLE_CONTENT</type>
+      <attributes />
+      <xloc>350</xloc>
+      <yloc>100</yloc>
+      <parallel>N</parallel>
+      <attributes_hac />
+    </action>
+    <action>
+      <sql>CALL etl_antam.pr_fail(${RUN_ID}, ${CONFIG_ID}, 'ROLLBACK_TARGET', 'WORKFLOW_FAILED', 'wf_rollback_targets gagal. Cek log Hop dan migration_error_log')</sql>
+      <connection>PG_TGT</connection>
+      <useVariableSubstitution>Y</useVariableSubstitution>
+      <sqlfromfile>N</sqlfromfile>
+      <sqlfilename />
+      <sendOneStatement>N</sendOneStatement>
+      <name>Fail rollback targets</name>
+      <description />
+      <type>SQL</type>
+      <attributes />
+      <xloc>350</xloc>
+      <yloc>260</yloc>
+      <parallel>N</parallel>
+      <attributes_hac />
+    </action>
+    <action>
+      <name>Done OK</name>
+      <description />
+      <type>SUCCESS</type>
+      <attributes />
+      <xloc>600</xloc>
+      <yloc>100</yloc>
+      <parallel>N</parallel>
+      <attributes_hac />
+    </action>
+    <action>
+      <name>Done (failure logged)</name>
+      <description />
+      <type>SUCCESS</type>
+      <attributes />
+      <xloc>600</xloc>
+      <yloc>260</yloc>
+      <parallel>N</parallel>
+      <attributes_hac />
+    </action>
+  </actions>
+  <hops>
+    <hop>
+      <from>Start</from>
+      <to>Rollback Multi-Targets</to>
+      <evaluation>Y</evaluation>
+      <unconditional>Y</unconditional>
+      <enabled>Y</enabled>
+    </hop>
+    <hop>
+      <from>Rollback Multi-Targets</from>
+      <to>Done OK</to>
+      <evaluation>Y</evaluation>
+      <unconditional>N</unconditional>
+      <enabled>Y</enabled>
+    </hop>
+    <hop>
+      <from>Rollback Multi-Targets</from>
+      <to>Fail rollback targets</to>
+      <evaluation>N</evaluation>
+      <unconditional>N</unconditional>
+      <enabled>Y</enabled>
+    </hop>
+    <hop>
+      <from>Fail rollback targets</from>
+      <to>Done (failure logged)</to>
+      <evaluation>Y</evaluation>
+      <unconditional>Y</unconditional>
+      <enabled>Y</enabled>
+    </hop>
+  </hops>
+  <notepads />
+  <attributes />
+</workflow>

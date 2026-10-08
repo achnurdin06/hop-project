@@ -1,0 +1,18 @@
+{
+  "variables": [
+    { "name": "PG_HOST", "value": "10.20.94.6", "description": "" },
+    { "name": "PG_PORT", "value": "5433", "description": "" },
+    { "name": "PG_DB", "value": "db_procsi", "description": "" },
+    { "name": "PG_USER", "value": "procsi", "description": "" },
+    { "name": "PG_PASSWORD", "value": "Pr0CSi", "description": "" },
+    { "name": "MSSQL_HOST", "value": "localhost", "description": "" },
+    { "name": "MSSQL_PORT", "value": "1433", "description": "" },
+    { "name": "MSSQL_DB", "value": "antam_scm", "description": "" },
+    { "name": "MSSQL_USER", "value": "sa", "description": "" },
+    { "name": "MSSQL_PASSWORD", "value": "Sisi@2026!", "description": "" },
+    { "name": "MSSQL_USER_SSH", "value": "developer", "description": "" },
+    { "name": "MSSQL_PASSWORD_SSH", "value": "Sisi@2026", "description": "" },
+    { "name": "MSSQL_PORT_SSH", "value": "22", "description": "" },
+    { "name": "MSSQL_HOST_SSH", "value": "10.20.95.10", "description": "" }
+  ]
+}

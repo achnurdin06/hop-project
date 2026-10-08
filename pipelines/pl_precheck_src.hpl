@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pipeline>
+  <info>
+    <name>pl_precheck_src</name>
+    <name_sync_with_filename>Y</name_sync_with_filename>
+    <description>Precheck sumber (SQL Server): view ada + query validasi data dari config</description>
+    <extended_description/>
+    <pipeline_version/>
+    <pipeline_type>Normal</pipeline_type>
+    <parameters>
+      <parameter>
+        <name>SRC_SCHEMA</name>
+        <default_value/>
+        <description/>
+      </parameter>
+      <parameter>
+        <name>SRC_VIEW</name>
+        <default_value/>
+        <description/>
+      </parameter>
+    </parameters>
+    <capture_transform_performance>N</capture_transform_performance>
+    <transform_performance_capturing_delay>1000</transform_performance_capturing_delay>
+    <transform_performance_capturing_size_limit>100</transform_performance_capturing_size_limit>
+    <created_user>-</created_user>
+    <created_date>2026/09/30 10:00:00.000</created_date>
+    <modified_user>-</modified_user>
+    <modified_date>2026/09/30 10:00:00.000</modified_date>
+  </info>
+  <notepads>
+  </notepads>
+  <order>
+    <hop>
+      <from>View exists</from>
+      <to>Set VIEW_EXISTS</to>
+      <enabled>Y</enabled>
+    </hop>
+    <hop>
+      <from>Source violations</from>
+      <to>Set SRC_VIOLATIONS</to>
+      <enabled>Y</enabled>
+    </hop>
+  </order>
+  <transform>
+    <name>View exists</name>
+    <type>TableInput</type>
+    <description/>
+    <distribute>Y</distribute>
+    <custom_distribution/>
+    <copies>1</copies>
+    <partitioning>
+      <method>none</method>
+      <schema_name/>
+    </partitioning>
+    <connection>MSSQL_SRC</connection><sql>SELECT COUNT(*) AS view_exists FROM INFORMATION_SCHEMA.VIEWS
+WHERE TABLE_SCHEMA = '${SRC_SCHEMA}' AND TABLE_NAME = '${SRC_VIEW}'</sql><limit>0</limit><lookup/><execute_each_row>N</execute_each_row><variables_active>Y</variables_active><lazy_conversion_active>N</lazy_conversion_active>
+    <attributes/>
+    <GUI>
+      <xloc>100</xloc>
+      <yloc>80</yloc>
+    </GUI>
+  </transform>
+  <transform>
+    <name>Set VIEW_EXISTS</name>
+    <type>SetVariable</type>
+    <description/>
+    <distribute>Y</distribute>
+    <custom_distribution/>
+    <copies>1</copies>
+    <partitioning>
+      <method>none</method>
+      <schema_name/>
+    </partitioning>
+    <fields><field><field_name>view_exists</field_name><variable_name>VIEW_EXISTS</variable_name><variable_type>PARENT_WORKFLOW</variable_type><default_value/></field></fields><use_formatting>N</use_formatting>
+    <attributes/>
+    <GUI>
+      <xloc>380</xloc>
+      <yloc>80</yloc>
+    </GUI>
+  </transform>
+  <transform>
+    <name>Source violations</name>
+    <type>TableInput</type>
+    <description/>
+    <distribute>Y</distribute>
+    <custom_distribution/>
+    <copies>1</copies>
+    <partitioning>
+      <method>none</method>
+      <schema_name/>
+    </partitioning>
+    <connection>MSSQL_SRC</connection><sql>${SRC_PRECHECK_SQL}</sql><limit>0</limit><lookup/><execute_each_row>N</execute_each_row><variables_active>Y</variables_active><lazy_conversion_active>N</lazy_conversion_active>
+    <attributes/>
+    <GUI>
+      <xloc>100</xloc>
+      <yloc>200</yloc>
+    </GUI>
+  </transform>
+  <transform>
+    <name>Set SRC_VIOLATIONS</name>
+    <type>SetVariable</type>
+    <description/>
+    <distribute>Y</distribute>
+    <custom_distribution/>
+    <copies>1</copies>
+    <partitioning>
+      <method>none</method>
+      <schema_name/>
+    </partitioning>
+    <fields><field><field_name>n</field_name><variable_name>SRC_VIOLATIONS</variable_name><variable_type>PARENT_WORKFLOW</variable_type><default_value/></field></fields><use_formatting>N</use_formatting>
+    <attributes/>
+    <GUI>
+      <xloc>380</xloc>
+      <yloc>200</yloc>
+    </GUI>
+  </transform>
+  <transform_error_handling>
+  </transform_error_handling>
+</pipeline>

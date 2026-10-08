@@ -1,0 +1,482 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflow>
+  <name>wf_post</name>
+  <name_sync_with_filename>Y</name_sync_with_filename>
+  <description>Orkestrator Utama Flow 2: Membaca config dan memposting data staging ke tabel slave/target</description>
+  <extended_description/>
+  <created_user>-</created_user>
+  <created_date>2026/10/06 20:48:00.000</created_date>
+  <modified_user>-</modified_user>
+  <modified_date>2026/10/06 20:48:00.000</modified_date>
+  <workflow_version/>
+  <parameters>
+    <parameter>
+      <name>RUN_ID</name>
+      <description>Target Run ID sesi migrasi/staging yang akan diposting ke tabel utama (Wajib)</description>
+      <default_value/>
+    </parameter>
+    <parameter>
+      <name>USE_BATCH</name>
+      <description>Mode posting target: Y (Batch) / N (Direct)</description>
+      <default_value>Y</default_value>
+    </parameter>
+    <parameter>
+      <name>BATCH_SIZE</name>
+      <description>Ukuran batch posting data target</description>
+      <default_value>1000</default_value>
+    </parameter>
+  </parameters>
+  <actions>
+      <action>
+         <repeat>N</repeat>
+         <schedulerType>0</schedulerType>
+         <intervalSeconds>0</intervalSeconds>
+         <intervalMinutes>60</intervalMinutes>
+         <DayOfMonth>1</DayOfMonth>
+         <weekDay>1</weekDay>
+         <minutes>0</minutes>
+         <hour>12</hour>
+         <doNotWaitOnFirstExecution>N</doNotWaitOnFirstExecution>
+         <name>Start</name>
+         <description/>
+         <type>SPECIAL</type>
+         <attributes/>
+         <xloc>48</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <connections>
+            <connection>
+               <name>MSSQL_SRC</name>
+               <waitfor>0</waitfor>
+               <waittime>millisecond</waittime>
+            </connection>
+            <connection>
+               <name>PG_TGT</name>
+               <waitfor>0</waitfor>
+               <waittime>millisecond</waittime>
+            </connection>
+         </connections>
+         <name>Check DB connections</name>
+         <description/>
+         <type>CHECK_DB_CONNECTIONS</type>
+         <attributes/>
+         <xloc>200</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <tablename>migration_config</tablename>
+         <schemaname>etl_antam</schemaname>
+         <connection>PG_TGT</connection>
+         <name>Exists migration_config</name>
+         <description/>
+         <type>TABLE_EXISTS</type>
+         <attributes/>
+         <xloc>360</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <tablename>migration_target_config</tablename>
+         <schemaname>etl_antam</schemaname>
+         <connection>PG_TGT</connection>
+         <name>Exists migration_target_config</name>
+         <description/>
+         <type>TABLE_EXISTS</type>
+         <attributes/>
+         <xloc>520</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <tablename>migration_run</tablename>
+         <schemaname>etl_antam</schemaname>
+         <connection>PG_TGT</connection>
+         <name>Exists migration_run</name>
+         <description/>
+         <type>TABLE_EXISTS</type>
+         <attributes/>
+         <xloc>680</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <tablename>migration_step_log</tablename>
+         <schemaname>etl_antam</schemaname>
+         <connection>PG_TGT</connection>
+         <name>Exists migration_step_log</name>
+         <description/>
+         <type>TABLE_EXISTS</type>
+         <attributes/>
+         <xloc>840</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <tablename>migration_error_log</tablename>
+         <schemaname>etl_antam</schemaname>
+         <connection>PG_TGT</connection>
+         <name>Exists migration_error_log</name>
+         <description/>
+         <type>TABLE_EXISTS</type>
+         <attributes/>
+         <xloc>1000</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <add_rows_result>N</add_rows_result>
+         <clear_result_rows>Y</clear_result_rows>
+         <is_usevars>Y</is_usevars>
+         <is_custom_sql>Y</is_custom_sql>
+         <custom_sql>SELECT 1 WHERE etl_antam.fn_validate_post_run('${RUN_ID}') IS NOT NULL</custom_sql>
+         <connection>PG_TGT</connection>
+         <tablename/>
+         <schemaname/>
+         <limit>1</limit>
+         <success_condition>rows_count_equal</success_condition>
+         <name>Validate RUN_ID</name>
+         <description>Validasi wajib parameter RUN_ID</description>
+         <type>EVAL_TABLE_CONTENT</type>
+         <attributes/>
+         <xloc>1160</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <filename>${PROJECT_HOME}/pipelines/pl_get_config.hpl</filename>
+         <params_from_previous>N</params_from_previous>
+         <exec_per_row>N</exec_per_row>
+         <clear_rows>N</clear_rows>
+         <clear_files>N</clear_files>
+         <create_parent_folder>N</create_parent_folder>
+         <set_logfile>N</set_logfile>
+         <set_append_logfile>N</set_append_logfile>
+         <logfile/>
+         <logext/>
+         <add_date>N</add_date>
+         <add_time>N</add_time>
+         <loglevel>Basic</loglevel>
+         <wait_until_finished>Y</wait_until_finished>
+         <parameters>
+            <pass_all_parameters>Y</pass_all_parameters>
+            <parameter>
+               <name>RUN_ID</name>
+               <stream_name/>
+               <value>${RUN_ID}</value>
+               <variable>${RUN_ID}</variable>
+            </parameter>
+         </parameters>
+         <run_configuration>local</run_configuration>
+         <name>Get config</name>
+         <description/>
+         <type>PIPELINE</type>
+         <attributes/>
+         <xloc>1160</xloc>
+         <yloc>200</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <filename>${PROJECT_HOME}/workflows/wf_post_targets.hwf</filename>
+         <params_from_previous>N</params_from_previous>
+         <exec_per_row>Y</exec_per_row>
+         <set_logfile>N</set_logfile>
+         <logfile/>
+         <logext/>
+         <add_date>N</add_date>
+         <add_time>N</add_time>
+         <loglevel>Basic</loglevel>
+         <set_append_logfile>N</set_append_logfile>
+         <create_parent_folder>N</create_parent_folder>
+         <wait_until_finished>Y</wait_until_finished>
+         <parameters>
+            <pass_all_parameters>N</pass_all_parameters>
+            <parameter>
+               <name>CONFIG_ID</name>
+               <value/>
+               <stream_name>config_id</stream_name>
+            </parameter>
+            <parameter>
+               <name>USE_BATCH</name>
+               <value>${USE_BATCH}</value>
+               <variable>${USE_BATCH}</variable>
+               <stream_name/>
+            </parameter>
+            <parameter>
+               <name>BATCH_SIZE</name>
+               <value>${BATCH_SIZE}</value>
+               <variable>${BATCH_SIZE}</variable>
+               <stream_name/>
+            </parameter>
+         </parameters>
+         <run_configuration>local</run_configuration>
+         <name>Post to target tables</name>
+         <description/>
+         <type>WORKFLOW</type>
+         <attributes/>
+         <xloc>1000</xloc>
+         <yloc>200</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <sql>CALL etl_antam.pr_finish_run(${RUN_ID}, 'wf_post selesai: data staging berhasil diposting ke tabel target', CASE WHEN '${USE_BATCH}' = 'Y' THEN 'BATCH (' || '${BATCH_SIZE}' || ')' ELSE 'DIRECT' END)</sql>
+         <connection>PG_TGT</connection>
+         <useVariableSubstitution>Y</useVariableSubstitution>
+         <sqlfromfile>N</sqlfromfile>
+         <sqlfilename/>
+         <sendOneStatement>N</sendOneStatement>
+         <name>Finish run</name>
+         <description/>
+         <type>SQL</type>
+         <attributes/>
+         <xloc>840</xloc>
+         <yloc>200</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <name>Done</name>
+         <description/>
+         <type>SUCCESS</type>
+         <attributes/>
+         <xloc>680</xloc>
+         <yloc>200</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <sql>UPDATE etl_antam.migration_run SET status = 'FAILED', end_time = now(), note = 'wf_post gagal, cek log Hop' WHERE run_id = ${RUN_ID}</sql>
+         <connection>PG_TGT</connection>
+         <useVariableSubstitution>Y</useVariableSubstitution>
+         <sqlfromfile>N</sqlfromfile>
+         <sqlfilename/>
+         <sqlfilename_encoding/>
+         <sendOneStatement>N</sendOneStatement>
+         <name>Mark run failed</name>
+         <description/>
+         <type>SQL</type>
+         <attributes/>
+         <xloc>1000</xloc>
+         <yloc>360</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <message>Pengecekan awal gagal: koneksi database atau tabel migration_target_config tidak siap</message>
+         <loglevel>Error</loglevel>
+         <name>Abort (pre-run)</name>
+         <description/>
+         <type>ABORT</type>
+         <attributes/>
+         <xloc>520</xloc>
+         <yloc>360</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <message>Post data ke tabel slave/target gagal, lihat etl_antam.migration_error_log</message>
+         <loglevel>Error</loglevel>
+         <name>Abort</name>
+         <description/>
+         <type>ABORT</type>
+         <attributes/>
+         <xloc>1000</xloc>
+         <yloc>500</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <sql>CALL etl_antam.pr_fail(NULLIF(regexp_replace('${RUN_ID}', '\D', '', 'g'), '')::bigint, NULL, 'VALIDATE_POST_RUN', 'VALIDATION_FAILED', 'wf_post ditolak: RUN_ID tidak valid, sudah pernah di-rollback, atau sudah pernah diposting sebelumnya')</sql>
+         <connection>PG_TGT</connection>
+         <useVariableSubstitution>Y</useVariableSubstitution>
+         <sqlfromfile>N</sqlfromfile>
+         <sqlfilename/>
+         <sendOneStatement>N</sendOneStatement>
+         <name>Log validate failure</name>
+         <description/>
+         <type>SQL</type>
+         <attributes/>
+         <xloc>1160</xloc>
+         <yloc>360</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+   </actions>
+  <hops>
+      <hop>
+         <from>Start</from>
+         <to>Check DB connections</to>
+         <evaluation>Y</evaluation>
+         <unconditional>Y</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Check DB connections</from>
+         <to>Exists migration_config</to>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Check DB connections</from>
+         <to>Abort (pre-run)</to>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Exists migration_config</from>
+         <to>Exists migration_target_config</to>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Exists migration_config</from>
+         <to>Abort (pre-run)</to>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Exists migration_target_config</from>
+         <to>Exists migration_run</to>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Exists migration_target_config</from>
+         <to>Abort (pre-run)</to>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Exists migration_run</from>
+         <to>Exists migration_step_log</to>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Exists migration_run</from>
+         <to>Abort (pre-run)</to>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Exists migration_step_log</from>
+         <to>Exists migration_error_log</to>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Exists migration_step_log</from>
+         <to>Abort (pre-run)</to>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Exists migration_error_log</from>
+         <to>Validate RUN_ID</to>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Exists migration_error_log</from>
+         <to>Abort (pre-run)</to>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Validate RUN_ID</from>
+         <to>Get config</to>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Validate RUN_ID</from>
+         <to>Log validate failure</to>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Log validate failure</from>
+         <to>Abort (pre-run)</to>
+         <evaluation>Y</evaluation>
+         <unconditional>Y</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Get config</from>
+         <to>Post to target tables</to>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Get config</from>
+         <to>Mark run failed</to>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Post to target tables</from>
+         <to>Finish run</to>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Post to target tables</from>
+         <to>Mark run failed</to>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Finish run</from>
+         <to>Done</to>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Finish run</from>
+         <to>Mark run failed</to>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+      <hop>
+         <from>Mark run failed</from>
+         <to>Abort</to>
+         <evaluation>Y</evaluation>
+         <unconditional>Y</unconditional>
+         <enabled>Y</enabled>
+      </hop>
+  </hops>
+  <notepads/>
+  <attributes/>
+</workflow>

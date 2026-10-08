@@ -1,0 +1,450 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflow>
+  <name>wf_purge_target</name>
+  <name_sync_with_filename>Y</name_sync_with_filename>
+  <description>Orkestrator Utama Hapus Data Target: Membaca config dan menghapus data target (single/multiple ID atau all data)</description>
+  <extended_description/>
+  <created_user>-</created_user>
+  <created_date>2026/10/07 10:00:00.000</created_date>
+  <modified_user>-</modified_user>
+  <modified_date>2026/10/07 10:00:00.000</modified_date>
+  <workflow_version/>
+  <parameters>
+    <parameter>
+      <name>CONFIG_ID</name>
+      <description>Config ID opsional (0/kosong untuk semua config)</description>
+      <default_value/>
+    </parameter>
+    <parameter>
+      <name>DELETE_IDS</name>
+      <description>Single/Multiple ID dipisah koma (opsional)</description>
+      <default_value/>
+    </parameter>
+  </parameters>
+  <actions>
+      <action>
+         <repeat>N</repeat>
+         <schedulerType>0</schedulerType>
+         <intervalSeconds>0</intervalSeconds>
+         <intervalMinutes>60</intervalMinutes>
+         <DayOfMonth>1</DayOfMonth>
+         <weekDay>1</weekDay>
+         <minutes>0</minutes>
+         <hour>12</hour>
+         <doNotWaitOnFirstExecution>N</doNotWaitOnFirstExecution>
+         <name>Start</name>
+         <description/>
+         <type>SPECIAL</type>
+         <attributes/>
+         <xloc>48</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <connections>
+            <connection>
+               <name>PG_TGT</name>
+               <waitfor>0</waitfor>
+               <waittime>millisecond</waittime>
+            </connection>
+         </connections>
+         <name>Check DB connection</name>
+         <description/>
+         <type>CHECK_DB_CONNECTIONS</type>
+         <attributes/>
+         <xloc>200</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <tablename>migration_config</tablename>
+         <schemaname>etl_antam</schemaname>
+         <connection>PG_TGT</connection>
+         <name>Exists migration_config</name>
+         <description/>
+         <type>TABLE_EXISTS</type>
+         <attributes/>
+         <xloc>360</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <tablename>migration_target_config</tablename>
+         <schemaname>etl_antam</schemaname>
+         <connection>PG_TGT</connection>
+         <name>Exists migration_target_config</name>
+         <description/>
+         <type>TABLE_EXISTS</type>
+         <attributes/>
+         <xloc>520</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <tablename>migration_run</tablename>
+         <schemaname>etl_antam</schemaname>
+         <connection>PG_TGT</connection>
+         <name>Exists migration_run</name>
+         <description/>
+         <type>TABLE_EXISTS</type>
+         <attributes/>
+         <xloc>680</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <tablename>migration_step_log</tablename>
+         <schemaname>etl_antam</schemaname>
+         <connection>PG_TGT</connection>
+         <name>Exists migration_step_log</name>
+         <description/>
+         <type>TABLE_EXISTS</type>
+         <attributes/>
+         <xloc>840</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <tablename>migration_error_log</tablename>
+         <schemaname>etl_antam</schemaname>
+         <connection>PG_TGT</connection>
+         <name>Exists migration_error_log</name>
+         <description/>
+         <type>TABLE_EXISTS</type>
+         <attributes/>
+         <xloc>1000</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <filename>${PROJECT_HOME}/pipelines/pl_init_run.hpl</filename>
+         <params_from_previous>N</params_from_previous>
+         <exec_per_row>N</exec_per_row>
+         <clear_rows>N</clear_rows>
+         <clear_files>N</clear_files>
+         <create_parent_folder>N</create_parent_folder>
+         <set_logfile>N</set_logfile>
+         <set_append_logfile>N</set_append_logfile>
+         <logfile/>
+         <logext/>
+         <add_date>N</add_date>
+         <add_time>N</add_time>
+         <loglevel>Basic</loglevel>
+         <wait_until_finished>Y</wait_until_finished>
+         <parameters>
+            <pass_all_parameters>Y</pass_all_parameters>
+            <parameter>
+               <name>MAIN_WORKFLOW</name>
+               <stream_name/>
+               <value>wf_purge_target.hwf</value>
+               <variable>wf_purge_target.hwf</variable>
+            </parameter>
+         </parameters>
+         <run_configuration>local</run_configuration>
+         <name>Init run</name>
+         <description/>
+         <type>PIPELINE</type>
+         <attributes/>
+         <xloc>1160</xloc>
+         <yloc>48</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <filename>${PROJECT_HOME}/pipelines/pl_get_config.hpl</filename>
+         <params_from_previous>N</params_from_previous>
+         <exec_per_row>N</exec_per_row>
+         <clear_rows>N</clear_rows>
+         <clear_files>N</clear_files>
+         <create_parent_folder>N</create_parent_folder>
+         <set_logfile>N</set_logfile>
+         <set_append_logfile>N</set_append_logfile>
+         <logfile/>
+         <logext/>
+         <add_date>N</add_date>
+         <add_time>N</add_time>
+         <loglevel>Basic</loglevel>
+         <wait_until_finished>Y</wait_until_finished>
+         <parameters>
+            <pass_all_parameters>Y</pass_all_parameters>
+         </parameters>
+         <run_configuration>local</run_configuration>
+         <name>Get config</name>
+         <description/>
+         <type>PIPELINE</type>
+         <attributes/>
+         <xloc>1160</xloc>
+         <yloc>200</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <filename>${PROJECT_HOME}/workflows/wf_purge_target_tables.hwf</filename>
+         <params_from_previous>N</params_from_previous>
+         <exec_per_row>Y</exec_per_row>
+         <set_logfile>N</set_logfile>
+         <logfile/>
+         <logext/>
+         <add_date>N</add_date>
+         <add_time>N</add_time>
+         <loglevel>Basic</loglevel>
+         <set_append_logfile>N</set_append_logfile>
+         <create_parent_folder>N</create_parent_folder>
+         <wait_until_finished>Y</wait_until_finished>
+         <parameters>
+            <pass_all_parameters>N</pass_all_parameters>
+            <parameter>
+               <name>CONFIG_ID</name>
+               <value/>
+               <stream_name>config_id</stream_name>
+            </parameter>
+            <parameter>
+               <name>DELETE_IDS</name>
+               <value>${DELETE_IDS}</value>
+               <variable>${DELETE_IDS}</variable>
+               <stream_name/>
+            </parameter>
+         </parameters>
+         <run_configuration>local</run_configuration>
+         <name>Purge target tables</name>
+         <description/>
+         <type>WORKFLOW</type>
+         <attributes/>
+         <xloc>1000</xloc>
+         <yloc>200</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <sql>CALL etl_antam.pr_finish_run(${RUN_ID})</sql>
+         <connection>PG_TGT</connection>
+         <useVariableSubstitution>Y</useVariableSubstitution>
+         <sqlfromfile>N</sqlfromfile>
+         <sqlfilename/>
+         <sendOneStatement>N</sendOneStatement>
+         <name>Finish run</name>
+         <description/>
+         <type>SQL</type>
+         <attributes/>
+         <xloc>840</xloc>
+         <yloc>200</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <name>Done</name>
+         <description/>
+         <type>SUCCESS</type>
+         <attributes/>
+         <xloc>680</xloc>
+         <yloc>200</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <sql>UPDATE etl_antam.migration_run SET status = 'FAILED', end_time = now(), note = 'wf_purge_target gagal, cek log Hop' WHERE run_id = ${RUN_ID}</sql>
+         <connection>PG_TGT</connection>
+         <useVariableSubstitution>Y</useVariableSubstitution>
+         <sqlfromfile>N</sqlfromfile>
+         <sqlfilename/>
+         <sendOneStatement>N</sendOneStatement>
+         <name>Set RUN FAILED</name>
+         <description/>
+         <type>SQL</type>
+         <attributes/>
+         <xloc>1000</xloc>
+         <yloc>350</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <message>Pengecekan awal gagal: koneksi database atau tabel etl_antam tidak siap</message>
+         <loglevel>Error</loglevel>
+         <name>Abort (pre-run)</name>
+         <description/>
+         <type>ABORT</type>
+         <attributes/>
+         <xloc>450</xloc>
+         <yloc>400</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+      <action>
+         <message>Hapus data target gagal, lihat etl_antam.migration_error_log</message>
+         <loglevel>Error</loglevel>
+         <name>Abort</name>
+         <description/>
+         <type>ABORT</type>
+         <attributes/>
+         <xloc>1040</xloc>
+         <yloc>544</yloc>
+         <parallel>N</parallel>
+         <attributes_hac/>
+      </action>
+   </actions>
+   <hops>
+      <hop>
+         <from>Start</from>
+         <to>Check DB connection</to>
+         <enabled>Y</enabled>
+         <evaluation>Y</evaluation>
+         <unconditional>Y</unconditional>
+      </hop>
+      <hop>
+         <from>Check DB connection</from>
+         <to>Exists migration_config</to>
+         <enabled>Y</enabled>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Check DB connection</from>
+         <to>Abort (pre-run)</to>
+         <enabled>Y</enabled>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Exists migration_config</from>
+         <to>Exists migration_target_config</to>
+         <enabled>Y</enabled>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Exists migration_config</from>
+         <to>Abort (pre-run)</to>
+         <enabled>Y</enabled>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Exists migration_target_config</from>
+         <to>Exists migration_run</to>
+         <enabled>Y</enabled>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Exists migration_target_config</from>
+         <to>Abort (pre-run)</to>
+         <enabled>Y</enabled>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Exists migration_run</from>
+         <to>Exists migration_step_log</to>
+         <enabled>Y</enabled>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Exists migration_run</from>
+         <to>Abort (pre-run)</to>
+         <enabled>Y</enabled>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Exists migration_step_log</from>
+         <to>Exists migration_error_log</to>
+         <enabled>Y</enabled>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Exists migration_step_log</from>
+         <to>Abort (pre-run)</to>
+         <enabled>Y</enabled>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Exists migration_error_log</from>
+         <to>Init run</to>
+         <enabled>Y</enabled>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Exists migration_error_log</from>
+         <to>Abort (pre-run)</to>
+         <enabled>Y</enabled>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Init run</from>
+         <to>Get config</to>
+         <enabled>Y</enabled>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Init run</from>
+         <to>Abort (pre-run)</to>
+         <enabled>Y</enabled>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Get config</from>
+         <to>Purge target tables</to>
+         <enabled>Y</enabled>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Get config</from>
+         <to>Set RUN FAILED</to>
+         <enabled>Y</enabled>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Purge target tables</from>
+         <to>Finish run</to>
+         <enabled>Y</enabled>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Purge target tables</from>
+         <to>Set RUN FAILED</to>
+         <enabled>Y</enabled>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Finish run</from>
+         <to>Done</to>
+         <enabled>Y</enabled>
+         <evaluation>Y</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Finish run</from>
+         <to>Set RUN FAILED</to>
+         <enabled>Y</enabled>
+         <evaluation>N</evaluation>
+         <unconditional>N</unconditional>
+      </hop>
+      <hop>
+         <from>Set RUN FAILED</from>
+         <to>Abort</to>
+         <enabled>Y</enabled>
+         <evaluation>Y</evaluation>
+         <unconditional>Y</unconditional>
+      </hop>
+   </hops>
+   <notepads/>
+   <attributes/>
+</workflow>
