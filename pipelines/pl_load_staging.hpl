@@ -113,6 +113,7 @@
     <force_enclosure>N</force_enclosure>
     <fields/>
     <ConcatFields>
+      <targetFieldName>row_data</targetFieldName>
       <targetFieldLength>0</targetFieldLength>
       <removeSelectedFields>N</removeSelectedFields>
     </ConcatFields>

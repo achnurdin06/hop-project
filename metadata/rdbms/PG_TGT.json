@@ -15,6 +15,7 @@
       "port": "${PG_PORT}",
       "sshTunnelHost": "",
       "attributes": {
+        "EXTRA_OPTION_POSTGRESQL.stringtype": "unspecified",
         "SUPPORTS_TIMESTAMP_DATA_TYPE": "Y",
         "QUOTE_ALL_FIELDS": "N",
         "SUPPORTS_BOOLEAN_DATA_TYPE": "Y",

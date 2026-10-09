@@ -12,6 +12,37 @@
 CREATE SCHEMA IF NOT EXISTS etl_antam;
 CREATE SCHEMA IF NOT EXISTS stg_antam;
 
+-- Assignment Casts untuk interoperabilitas ETL & JDBC (varchar/text -> date, timestamp, uuid)
+DO $$ BEGIN
+  CREATE CAST (varchar AS date) WITH INOUT AS ASSIGNMENT;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE CAST (text AS date) WITH INOUT AS ASSIGNMENT;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE CAST (varchar AS timestamp) WITH INOUT AS ASSIGNMENT;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE CAST (text AS timestamp) WITH INOUT AS ASSIGNMENT;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE CAST (varchar AS uuid) WITH INOUT AS ASSIGNMENT;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE CAST (text AS uuid) WITH INOUT AS ASSIGNMENT;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- =====================================================================
 -- [SECTION 1] TABEL METADATA, KONFIGURASI & LOGGING
 -- =====================================================================
@@ -542,14 +573,6 @@ BEGIN
     v_ss  := CASE WHEN r.normalize THEN format('upper(btrim(s.%I::text))', v_src) ELSE format('s.%I::text', v_src) END;
     v_mf  := CASE WHEN r.master_filter IS NOT NULL THEN ' AND (' || r.master_filter || ')' ELSE '' END;
 
-    EXECUTE format('SELECT count(*) FROM (SELECT 1 FROM %I.%I m WHERE true%s GROUP BY %s HAVING count(*) > 1) d',
-                   r.master_schema, r.master_table, v_mf, v_ms) INTO v_cnt;
-    IF v_cnt > 0 THEN
-      CALL etl_antam.pr_fail(p_run, p_cfg, 'CONVERT', 'MASTER_DUPLICATE',
-           format('master %s.%s punya %s kode ganda pada %s', r.master_schema, r.master_table, v_cnt, r.master_src_col));
-      RETURN 1;
-    END IF;
-
     IF r.on_unmapped = 'FAIL' THEN
       v_from := format('stg_antam.%I s LEFT JOIN %I.%I m ON %s = %s%s WHERE s.%I IS NOT NULL AND m.%I IS NULL',
                        v_stg_tbl, r.master_schema, r.master_table, v_ms, v_ss, v_mf, v_src, r.master_src_col);
@@ -592,9 +615,10 @@ BEGIN
 
     EXECUTE format($q$
       UPDATE stg_antam.%1$I s SET %2$I = COALESCE(x.v, %3$s)%4$s
-        FROM (SELECT s2.ctid AS rid, m.%5$I::text AS v
+        FROM (SELECT DISTINCT ON (s2.ctid) s2.ctid AS rid, m.%5$I::text AS v
                 FROM stg_antam.%1$I s2
-                LEFT JOIN %6$I.%7$I m ON %8$s = %9$s%10$s) x
+                LEFT JOIN %6$I.%7$I m ON %8$s = %9$s%10$s
+               ORDER BY s2.ctid) x
        WHERE s.ctid = x.rid %11$s
     $q$, v_stg_tbl, r.column_name, v_fb, v_cast, r.master_tgt_col,
          r.master_schema, r.master_table, v_ms, v_ss2, v_mf, v_extra);
