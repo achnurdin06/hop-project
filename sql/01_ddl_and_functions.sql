@@ -279,7 +279,8 @@ BEGIN
 END $$;
 
 -- 3.2b Validasi Pilihan Config (Wajib diisi & valid di migration_config)
-CREATE OR REPLACE FUNCTION etl_antam.fn_validate_config_selection(p_config_id text)
+DROP FUNCTION IF EXISTS etl_antam.fn_validate_config_selection(text);
+CREATE OR REPLACE FUNCTION etl_antam.fn_validate_config_selection(p_config_ids text)
 RETURNS int LANGUAGE plpgsql AS $$
 DECLARE
   v_raw text;
@@ -437,7 +438,7 @@ END $$;
 -- 3.3 Prepare Staging Table (Single Source of Truth)
 CREATE OR REPLACE FUNCTION etl_antam.fn_prepare_staging(p_run bigint, p_cfg int)
 RETURNS int LANGUAGE plpgsql AS $$
-DECLARE c etl_antam.migration_config%ROWTYPE; r record; v_src text; v_prob text; v_stg_tbl text; v_id_col text; v_seq_name text; v_max_id bigint; v_det text;
+DECLARE c etl_antam.migration_config%ROWTYPE; r record; v_src text; v_prob text; v_stg_tbl text; v_id_col text; v_id_type text; v_seq_name text; v_max_id bigint; v_det text;
 BEGIN
   CALL etl_antam.pr_log_step(p_run, p_cfg, 'STAGING', 'START', 'siapkan tabel staging');
   SELECT * INTO c FROM etl_antam.migration_config WHERE config_id = p_cfg;
@@ -465,14 +466,14 @@ BEGIN
     EXECUTE format('ALTER TABLE stg_antam.%I ALTER COLUMN %I DROP NOT NULL', v_stg_tbl, r.column_name);
   END LOOP;
 
-  -- Auto-Sequence LPAD 8-Digit ID Generation
+  -- Auto-Sequence ID Generation (Mendukung ID tipe Integer maupun Text/LPAD)
   v_id_col := NULLIF(btrim(c.id_column), '');
   IF v_id_col IS NOT NULL THEN
     EXECUTE format($q$
       SELECT COALESCE(
-        (SELECT max(NULLIF(regexp_replace(%1$I, '\D', '', 'g'), '')::bigint) 
+        (SELECT max(NULLIF(regexp_replace(%1$I::text, '\D', '', 'g'), '')::bigint) 
            FROM %2$I.%3$I 
-          WHERE %1$I IS NOT NULL AND %1$I ~ '\d+'),
+          WHERE %1$I IS NOT NULL AND %1$I::text ~ '\d+'),
         %4$s
       )
     $q$, v_id_col, c.tgt_schema, c.tgt_table, COALESCE(c.id_seed, 0)) INTO v_max_id;
@@ -481,12 +482,23 @@ BEGIN
       v_max_id := COALESCE(c.id_seed, 0);
     END IF;
 
+    SELECT data_type INTO v_id_type 
+      FROM information_schema.columns 
+     WHERE table_schema = c.tgt_schema AND table_name = c.tgt_table AND column_name = v_id_col;
+
     v_seq_name := 'seq_' || v_stg_tbl || '_' || v_id_col;
     EXECUTE format('DROP SEQUENCE IF EXISTS stg_antam.%I', v_seq_name);
     EXECUTE format('CREATE SEQUENCE stg_antam.%I START WITH %s', v_seq_name, v_max_id + 1);
-    EXECUTE format('ALTER TABLE stg_antam.%I ADD COLUMN IF NOT EXISTS %I text', v_stg_tbl, v_id_col);
-    EXECUTE format('ALTER TABLE stg_antam.%I ALTER COLUMN %I SET DEFAULT lpad(nextval(''stg_antam.%I'')::text, %s, ''0'')',
-                   v_stg_tbl, v_id_col, v_seq_name, COALESCE(c.id_width, 8));
+
+    IF v_id_type IN ('integer', 'bigint', 'smallint') THEN
+      EXECUTE format('ALTER TABLE stg_antam.%I ADD COLUMN IF NOT EXISTS %I %s', v_stg_tbl, v_id_col, v_id_type);
+      EXECUTE format('ALTER TABLE stg_antam.%I ALTER COLUMN %I SET DEFAULT nextval(''stg_antam.%I'')::%s',
+                     v_stg_tbl, v_id_col, v_seq_name, v_id_type);
+    ELSE
+      EXECUTE format('ALTER TABLE stg_antam.%I ADD COLUMN IF NOT EXISTS %I text', v_stg_tbl, v_id_col);
+      EXECUTE format('ALTER TABLE stg_antam.%I ALTER COLUMN %I SET DEFAULT lpad(nextval(''stg_antam.%I'')::text, %s, ''0'')',
+                     v_stg_tbl, v_id_col, v_seq_name, COALESCE(c.id_width, 8));
+    END IF;
   END IF;
 
   FOR r IN SELECT * FROM etl_antam.vw_convert_rule WHERE config_id = p_cfg LOOP
