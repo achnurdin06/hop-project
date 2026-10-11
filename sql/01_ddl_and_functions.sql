@@ -251,6 +251,7 @@ SELECT r.rule_id, r.config_id, r.column_name, r.source_column, r.lookup_name,
 -- [SECTION 2] PROSEDUR UTILITY & LOGGING
 -- =====================================================================
 
+DROP PROCEDURE IF EXISTS etl_antam.pr_log_step(bigint, integer, text, text, text, bigint, bigint, bigint, bigint, bigint);
 CREATE OR REPLACE PROCEDURE etl_antam.pr_log_step(
   p_run bigint, p_cfg int, p_step text, p_status text, p_msg text DEFAULT NULL,
   p_rows_src bigint DEFAULT NULL, p_rows_stg bigint DEFAULT NULL,
@@ -1075,6 +1076,7 @@ FOR EACH ROW
 EXECUTE FUNCTION etl_antam.trg_fn_auto_mapping_target_config();
 
 -- 4.1 Post Target Dispatcher (Per Target Config)
+DROP FUNCTION IF EXISTS etl_antam.fn_post_target_dispatch(bigint, integer);
 CREATE OR REPLACE FUNCTION etl_antam.fn_post_target_dispatch(
   p_run bigint, 
   p_target_cfg int,
@@ -1209,6 +1211,7 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 
 -- 4.2 Post All Targets (With Auto-Rollback on Failure)
+DROP FUNCTION IF EXISTS etl_antam.fn_post_all_targets(bigint, integer);
 CREATE OR REPLACE FUNCTION etl_antam.fn_post_all_targets(
   p_run bigint, 
   p_cfg int,
