@@ -50,22 +50,33 @@
   1. Jalankan `wf_post.hwf` dengan parameter `RUN_ID = 146`, `USE_BATCH = 'Y'`, dan `BATCH_SIZE = '100'`.
   2. Periksa entri log pada `migration_step_log` dan `migration_run`:
      ```sql
-     SELECT step_name, status, message 
+     SELECT step_name, status, rows_before, rows_after, rows_new, message 
        FROM etl_antam.migration_step_log 
       WHERE run_id = 146 AND step_name = 'POST_TARGET' 
       ORDER BY log_id DESC;
 
-     SELECT run_id, status, is_posted, posted_at, post_type 
+     SELECT run_id, status, is_posted, posted_at, post_type, note 
        FROM etl_antam.migration_run WHERE run_id = 146;
      ```
-- **Kriteria Keberhasilan**: Data masuk sempurna ke `vendor.slave_vendors` dan `vendor.vendors`. Kolom `is_posted` bernilai `true`, `post_type` bernilai `'BATCH (100)'`, dan status tetap `SUCCESS`.
+- **Kriteria Keberhasilan**: 
+  - Data masuk sempurna ke `vendor.slave_vendors` dan `vendor.vendors`. 
+  - Kolom `is_posted` bernilai `true`, `post_type` bernilai `'BATCH (100)'`, dan status tetap `SUCCESS`.
+  - Pada `migration_step_log`: Kolom `rows_before` dan `rows_after` terisi angka count aktual, `rows_new` = `rows_after - rows_before`, serta pesan berformat `Sebelum=X, Sesudah=Y, Selisih=+Z baris`.
+  - Pada `migration_run.note`: Merangkum total baris yang bertambah beserta rincian per target table (`total +... baris diposting [...]`).
 
 ---
 
 ### TC-03: Target Posting Mode Direct (`wf_post.hwf`, `RUN_ID = 146`, `USE_BATCH = 'N'`)
 - **Langkah**:
   1. Jalankan `wf_post.hwf` dengan parameter `RUN_ID = 146` dan `USE_BATCH = 'N'`.
-- **Kriteria Keberhasilan**: Workflow berjalan sukses tanpa error validasi parameter. Kolom `is_posted` bernilai `true`, `post_type` bernilai `'DIRECT'`, status tetap `SUCCESS`.
+  2. Periksa entri log pada `migration_step_log`:
+     ```sql
+     SELECT step_name, status, rows_before, rows_after, rows_new, message 
+       FROM etl_antam.migration_step_log 
+      WHERE run_id = 146 AND step_name = 'POST_TARGET' 
+      ORDER BY log_id DESC;
+     ```
+- **Kriteria Keberhasilan**: Workflow berjalan sukses tanpa error validasi parameter. Kolom `is_posted` bernilai `true`, `post_type` bernilai `'DIRECT'`, status tetap `SUCCESS`. Kolom `rows_before`, `rows_after`, dan `rows_new` terisi audit count yang akurat.
 
 ---
 
@@ -104,14 +115,21 @@
 ### TC-08: Rollback Sesi Migrasi Sukses (Single-Record Lifecycle) (`wf_rollback.hwf`)
 - **Langkah**:
   1. Eksekusi `wf_rollback.hwf` dengan parameter `RUN_ID = 146`.
-  2. Buka database target dan periksa `migration_run`:
+  2. Buka database target dan periksa `migration_run` serta `migration_step_log`:
      ```sql
      SELECT run_id, status, is_posted, is_rolled_back, rolled_back_at, note 
        FROM etl_antam.migration_run WHERE run_id = 146;
+
+     SELECT step_name, status, rows_before, rows_after, rows_deleted, message 
+       FROM etl_antam.migration_step_log 
+      WHERE run_id = 146 AND step_name = 'ROLLBACK_TARGET' 
+      ORDER BY log_id DESC;
      ```
 - **Kriteria Keberhasilan**: 
   - Data hasil posting `RUN_ID = 146` terhapus dari `vendor.slave_vendors` dan `vendor.vendors`.
   - Record `RUN_ID = 146` yang sama diperbarui: `is_rolled_back = true`, `rolled_back_at` terisi timestamp terkini, dan status tetap `SUCCESS`.
+  - Pada `migration_step_log`: Kolom `rows_before` dan `rows_after` terisi count aktual sebelum & sesudah rollback, `rows_deleted` = `rows_before - rows_after`, dan pesan memuat `Sebelum=X, Sesudah=Y, Selisih=-Z baris terhapus`.
+  - Pada `migration_run.note`: Merangkum total baris yang dihapus (`Total -... baris dihapus dari ... target table`).
   - **Tidak ada baris baru** yang dibuat di `etl_antam.migration_run`.
 
 ---

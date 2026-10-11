@@ -1,0 +1,26 @@
+{
+  "variables": [
+    { "name": "CLIENT_ID", "value": "${CLIENT_ID}", "description": "ID Master Client" },
+    { "name": "CLIENT_CODE", "value": "${CLIENT_CODE}", "description": "Kode Klien Master" },
+    { "name": "CLIENT_NAME", "value": "${CLIENT_NAME}", "description": "Nama Resmi Klien" },
+    { "name": "CLIENT_DESC", "value": "${CLIENT_DESC}", "description": "Deskripsi Klien" },
+    { "name": "ENV_ID", "value": "${ENV_ID}", "description": "ID Master Environment" },
+    { "name": "ENV_CODE", "value": "${ENV_CODE}", "description": "Kode Environment" },
+    { "name": "ENV_NAME", "value": "${ENV_NAME}", "description": "Nama Environment Master" },
+    { "name": "ENV_DESC", "value": "${ENV_DESC}", "description": "Deskripsi Environment" },
+    { "name": "PG_HOST", "value": "${PG_HOST}", "description": "Target PG Host" },
+    { "name": "PG_PORT", "value": "${PG_PORT}", "description": "Target PG Port" },
+    { "name": "PG_DB", "value": "${PG_DB}", "description": "Target PG DB" },
+    { "name": "PG_USER", "value": "${PG_USER}", "description": "Target PG User" },
+    { "name": "PG_PASSWORD", "value": "${PG_PASSWORD}", "description": "Target PG Password" },
+    { "name": "MSSQL_HOST", "value": "${MSSQL_HOST}", "description": "Source MSSQL Host" },
+    { "name": "MSSQL_PORT", "value": "${MSSQL_PORT}", "description": "Source MSSQL Port" },
+    { "name": "MSSQL_DB", "value": "${MSSQL_DB}", "description": "Source MSSQL DB" },
+    { "name": "MSSQL_USER", "value": "${MSSQL_USER}", "description": "Source MSSQL User" },
+    { "name": "MSSQL_PASSWORD", "value": "${MSSQL_PASSWORD}", "description": "Source MSSQL Password" },
+    { "name": "MSSQL_USER_SSH", "value": "${MSSQL_USER_SSH}", "description": "SSH Bastion User" },
+    { "name": "MSSQL_PASSWORD_SSH", "value": "${MSSQL_PASSWORD_SSH}", "description": "SSH Bastion Password" },
+    { "name": "MSSQL_PORT_SSH", "value": "${MSSQL_PORT_SSH}", "description": "SSH Bastion Port" },
+    { "name": "MSSQL_HOST_SSH", "value": "${MSSQL_HOST_SSH}", "description": "SSH Bastion Host" }
+  ]
+}

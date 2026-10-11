@@ -20,6 +20,16 @@
       <description>Single/Multiple ID dipisah koma (opsional)</description>
       <default_value/>
     </parameter>
+    <parameter>
+      <name>CLIENT_CODE</name>
+      <description>Kode Klien Master (default: ${CLIENT_CODE})</description>
+      <default_value>${CLIENT_CODE}</default_value>
+    </parameter>
+    <parameter>
+      <name>ENV_CODE</name>
+      <description>Kode Environment Master (default: ${ENV_CODE})</description>
+      <default_value>${ENV_CODE}</default_value>
+    </parameter>
   </parameters>
   <actions>
       <action>
@@ -145,6 +155,18 @@
                <stream_name/>
                <value>wf_purge_target.hwf</value>
                <variable>wf_purge_target.hwf</variable>
+            </parameter>
+            <parameter>
+               <name>CLIENT_CODE</name>
+               <stream_name/>
+               <value>${CLIENT_CODE}</value>
+               <variable>${CLIENT_CODE}</variable>
+            </parameter>
+            <parameter>
+               <name>ENV_CODE</name>
+               <stream_name/>
+               <value>${ENV_CODE}</value>
+               <variable>${ENV_CODE}</variable>
             </parameter>
          </parameters>
          <run_configuration>local</run_configuration>

@@ -66,7 +66,55 @@ CREATE TABLE IF NOT EXISTS etl_antam.migration_config (
   CONSTRAINT uq_migration_config_src_view UNIQUE (src_schema, src_view)
 );
 
--- 1.2 Tabel Log Sesi Eksekusi Migrasi & Rollback (Single-Record Lifecycle)
+
+-- 1.2 Tabel Master Client (Entitas Klien / Perusahaan)
+CREATE TABLE IF NOT EXISTS etl_antam.master_client (
+  client_id   serial CONSTRAINT pk_master_client PRIMARY KEY,
+  client_code varchar(50) UNIQUE NOT NULL,
+  client_name varchar(150) NOT NULL,
+  description text,
+  is_active   boolean DEFAULT true,
+  created_at  timestamp DEFAULT CURRENT_TIMESTAMP,
+  updated_at  timestamp DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 1.3 Tabel Master Environment (Lingkungan Eksekusi per Client)
+CREATE TABLE IF NOT EXISTS etl_antam.master_environment (
+  env_id      serial CONSTRAINT pk_master_environment PRIMARY KEY,
+  client_id   int REFERENCES etl_antam.master_client(client_id) ON DELETE CASCADE,
+  env_code    varchar(30) NOT NULL,
+  env_name    varchar(100) NOT NULL,
+  description text,
+  is_active   boolean DEFAULT true,
+  created_at  timestamp DEFAULT CURRENT_TIMESTAMP,
+  updated_at  timestamp DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_master_client_env UNIQUE (client_id, env_code)
+);
+
+-- 1.4 Tabel Master Connection (Koneksi Database per Environment)
+CREATE TABLE IF NOT EXISTS etl_antam.master_connection (
+  connection_id   serial CONSTRAINT pk_master_connection PRIMARY KEY,
+  env_id          int REFERENCES etl_antam.master_environment(env_id) ON DELETE CASCADE,
+  connection_name varchar(100) NOT NULL,
+  db_type         varchar(30) NOT NULL,
+  db_role         varchar(30) NOT NULL,
+  host            varchar(150) NOT NULL,
+  port            int NOT NULL,
+  database_name   varchar(100) NOT NULL,
+  db_schema       varchar(100) DEFAULT 'dbo',
+  username        varchar(100) NOT NULL,
+  password        varchar(255),
+  use_ssh_tunnel  boolean DEFAULT false,
+  ssh_host        varchar(150),
+  ssh_port        int DEFAULT 22,
+  ssh_user        varchar(100),
+  ssh_password    varchar(255),
+  is_active       boolean DEFAULT true,
+  created_at      timestamp DEFAULT CURRENT_TIMESTAMP,
+  updated_at      timestamp DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 1.5 Tabel Log Sesi Eksekusi Migrasi & Rollback (Single-Record Lifecycle)
 CREATE TABLE IF NOT EXISTS etl_antam.migration_run (
   run_id              bigserial CONSTRAINT pk_migration_run PRIMARY KEY,
   run_ts              varchar(15) NOT NULL,          -- Format Timestamp YYYYMMDD_HH24MI
@@ -77,6 +125,10 @@ CREATE TABLE IF NOT EXISTS etl_antam.migration_run (
   hop_host            varchar(100),                  -- Host/IP pengirim eksekusi
   note                text,                          -- Catatan detail eksekusi
   config_id           text,                          -- ID atau daftar ID konfigurasi yang diproses (contoh: 1 atau 1,2,3)
+  client_id           int REFERENCES etl_antam.master_client(client_id), -- ID Klien Terkait
+  env_id              int REFERENCES etl_antam.master_environment(env_id), -- ID Environment Terkait
+  client              varchar(100),                  -- Nama/Label Klien
+  environment         varchar(50),                   -- Nama/Label Environment
   is_posted           boolean DEFAULT false,         -- True jika data staging telah berhasil diposting ke tabel utama
   posted_at           timestamp,                     -- Waktu posting berhasil diselesaikan
   post_type           varchar(30),                   -- Tipe posting: BATCH (1000), DIRECT, NULL jika baru staging
@@ -85,6 +137,10 @@ CREATE TABLE IF NOT EXISTS etl_antam.migration_run (
 );
 ALTER TABLE etl_antam.migration_run ADD COLUMN IF NOT EXISTS main_workflow varchar(50);
 ALTER TABLE etl_antam.migration_run ADD COLUMN IF NOT EXISTS config_id text;
+ALTER TABLE etl_antam.migration_run ADD COLUMN IF NOT EXISTS client_id int;
+ALTER TABLE etl_antam.migration_run ADD COLUMN IF NOT EXISTS env_id int;
+ALTER TABLE etl_antam.migration_run ADD COLUMN IF NOT EXISTS client varchar(100);
+ALTER TABLE etl_antam.migration_run ADD COLUMN IF NOT EXISTS environment varchar(50);
 ALTER TABLE etl_antam.migration_run ADD COLUMN IF NOT EXISTS is_posted boolean DEFAULT false;
 ALTER TABLE etl_antam.migration_run ADD COLUMN IF NOT EXISTS posted_at timestamp;
 ALTER TABLE etl_antam.migration_run ADD COLUMN IF NOT EXISTS post_type varchar(30);
@@ -99,10 +155,13 @@ CREATE TABLE IF NOT EXISTS etl_antam.migration_step_log (
   step_name     varchar(30),                -- PRECHECK / STAGING / CONVERT / DELTA / POST_TARGET / ROLLBACK
   status        varchar(10),                -- START / OK / SKIP / FAILED
   rows_src      bigint, rows_stg bigint, rows_new bigint, rows_changed bigint, rows_deleted bigint,
+  rows_before   bigint, rows_after bigint,  -- Jumlah baris sebelum & sesudah eksekusi target
   start_time    timestamp DEFAULT now(),
   end_time      timestamp,
   message       text
 );
+ALTER TABLE etl_antam.migration_step_log ADD COLUMN IF NOT EXISTS rows_before bigint;
+ALTER TABLE etl_antam.migration_step_log ADD COLUMN IF NOT EXISTS rows_after bigint;
 
 -- 1.4 Tabel Log Error Diagnostic
 CREATE TABLE IF NOT EXISTS etl_antam.migration_error_log (
@@ -195,14 +254,15 @@ SELECT r.rule_id, r.config_id, r.column_name, r.source_column, r.lookup_name,
 CREATE OR REPLACE PROCEDURE etl_antam.pr_log_step(
   p_run bigint, p_cfg int, p_step text, p_status text, p_msg text DEFAULT NULL,
   p_rows_src bigint DEFAULT NULL, p_rows_stg bigint DEFAULT NULL,
-  p_rows_new bigint DEFAULT NULL, p_rows_chg bigint DEFAULT NULL, p_rows_del bigint DEFAULT NULL)
+  p_rows_new bigint DEFAULT NULL, p_rows_chg bigint DEFAULT NULL, p_rows_del bigint DEFAULT NULL,
+  p_rows_before bigint DEFAULT NULL, p_rows_after bigint DEFAULT NULL)
 LANGUAGE plpgsql AS $$
 BEGIN
   INSERT INTO etl_antam.migration_step_log
     (run_id, config_id, step_name, status, message,
-     rows_src, rows_stg, rows_new, rows_changed, rows_deleted, end_time)
+     rows_src, rows_stg, rows_new, rows_changed, rows_deleted, rows_before, rows_after, end_time)
   VALUES (p_run, p_cfg, p_step, p_status, p_msg,
-     p_rows_src, p_rows_stg, p_rows_new, p_rows_chg, p_rows_del, now());
+     p_rows_src, p_rows_stg, p_rows_new, p_rows_chg, p_rows_del, p_rows_before, p_rows_after, now());
 END $$;
 
 CREATE OR REPLACE PROCEDURE etl_antam.pr_log_error(
@@ -760,6 +820,8 @@ DECLARE
   v_fail int; 
   v_err int; 
   v_status text;
+  v_total_posted bigint := 0;
+  v_summary_det text;
 BEGIN
   IF p_post_type IS NOT NULL THEN
     SELECT count(DISTINCT config_id),
@@ -771,6 +833,15 @@ BEGIN
     SELECT count(*) INTO v_err 
       FROM etl_antam.migration_error_log 
      WHERE run_id = p_run AND step_name LIKE 'POST%';
+
+    SELECT COALESCE(sum(rows_new), 0) INTO v_total_posted
+      FROM etl_antam.migration_step_log
+     WHERE run_id = p_run AND step_name = 'POST_TARGET' AND status = 'OK' AND rows_new IS NOT NULL;
+
+    SELECT string_agg(format('%s (+%s)', regexp_replace(message, '.*selesai post ke ([^ ]+).*', '\1'), rows_new), ', ')
+      INTO v_summary_det
+      FROM etl_antam.migration_step_log
+     WHERE run_id = p_run AND step_name = 'POST_TARGET' AND status = 'OK' AND rows_before IS NOT NULL;
 
     IF (v_fail > 0 OR v_err > 0) THEN
       v_status := 'FAILED';
@@ -784,7 +855,12 @@ BEGIN
            is_posted = (v_status = 'SUCCESS'),
            posted_at = CASE WHEN v_status = 'SUCCESS' THEN now() ELSE posted_at END,
            post_type = CASE WHEN v_status = 'SUCCESS' THEN p_post_type ELSE post_type END,
-           note = COALESCE(p_note, 'wf_post selesai')
+           note = COALESCE(
+             CASE WHEN v_status = 'SUCCESS' AND v_summary_det IS NOT NULL 
+                  THEN format('wf_post selesai (mode %s): total +%s baris diposting [%s]', p_post_type, v_total_posted, v_summary_det)
+                  ELSE p_note END,
+             format('Posting selesai (mode %s): %s baris diposting', p_post_type, v_total_posted)
+           )
      WHERE run_id = p_run;
 
   ELSE
@@ -808,7 +884,7 @@ BEGIN
        SET end_time = now(),
            status = v_status,
            note = COALESCE(p_note, format('%s tabel diproses, %s gagal', COALESCE(v_total, 0), COALESCE(v_fail, 0) + CASE WHEN v_err > 0 AND v_fail = 0 THEN 1 ELSE 0 END))
-     WHERE run_id = p_run;
+       WHERE run_id = p_run;
   END IF;
 END $$;
 
@@ -1012,6 +1088,9 @@ DECLARE
   v_stg_tbl text; v_n int; v_ins bigint := 0; v_total_ins bigint := 0; 
   v_batch_cnt int := 0; v_det text; v_use_batch text;
   v_mapping_sql text;
+  v_count_before bigint := 0;
+  v_count_after bigint := 0;
+  v_diff bigint := 0;
 BEGIN
   SELECT * INTO tc 
     FROM etl_antam.migration_target_config 
@@ -1062,8 +1141,13 @@ BEGIN
     RETURN 1;
   END IF;
 
+  -- 1. HITUNG JUMLAH DATA SEBELUM POST (COUNT BEFORE)
+  EXECUTE format('SELECT count(*) FROM %I.%I', tc.tgt_schema, tc.tgt_table) INTO v_count_before;
+
   CALL etl_antam.pr_log_step(p_run, tc.config_id, 'POST_TARGET', 'START',
-       format('post data ke %s.%s (order %s, mode %s, batch_size %s)', tc.tgt_schema, tc.tgt_table, tc.exec_order, v_use_batch, COALESCE(p_batch_size::text, 'N/A')));
+       format('post data ke %s.%s (order %s, mode %s, batch_size %s, jumlah awal=%s)', 
+              tc.tgt_schema, tc.tgt_table, tc.exec_order, v_use_batch, COALESCE(p_batch_size::text, 'N/A'), v_count_before),
+       NULL, NULL, NULL, NULL, NULL, v_count_before, NULL);
 
   IF tc.precheck_sql IS NOT NULL AND btrim(tc.precheck_sql) <> '' THEN
     EXECUTE tc.precheck_sql INTO v_n;
@@ -1108,9 +1192,15 @@ BEGIN
     END IF;
   END IF;
 
+  -- 2. HITUNG JUMLAH DATA SESUDAH POST (COUNT AFTER) & KALKULASI SELISIH
+  EXECUTE format('SELECT count(*) FROM %I.%I', tc.tgt_schema, tc.tgt_table) INTO v_count_after;
+  v_diff := v_count_after - v_count_before;
+
   CALL etl_antam.pr_log_step(p_run, tc.config_id, 'POST_TARGET', 'OK',
-       format('selesai post %s baris ke %s.%s (mode %s)', v_total_ins, tc.tgt_schema, tc.tgt_table, v_use_batch),
-       NULL, NULL, v_total_ins);
+       format('selesai post ke %s.%s (mode %s): Sebelum=%s, Sesudah=%s, Selisih=+%s baris (ter-insert=%s)',
+              tc.tgt_schema, tc.tgt_table, v_use_batch, v_count_before, v_count_after, v_diff, v_total_ins),
+       NULL, NULL, v_diff, NULL, NULL, v_count_before, v_count_after);
+
   RETURN 0;
 EXCEPTION WHEN OTHERS THEN
   GET STACKED DIAGNOSTICS v_det = PG_EXCEPTION_DETAIL;
@@ -1219,6 +1309,9 @@ DECLARE
   tc etl_antam.migration_target_config%ROWTYPE;
   c  etl_antam.migration_config%ROWTYPE;
   v_stg_tbl text; v_del bigint := 0; v_id_col text; v_pk1 text; v_det text;
+  v_count_before bigint := 0;
+  v_count_after bigint := 0;
+  v_diff bigint := 0;
 BEGIN
   SELECT * INTO tc 
     FROM etl_antam.migration_target_config 
@@ -1242,8 +1335,16 @@ BEGIN
   v_id_col  := NULLIF(btrim(c.id_column), '');
   v_pk1     := btrim((string_to_array(tc.pk_columns, ','))[1]);
 
+  -- Hitung count_before pada target table sebelum rollback
+  BEGIN
+    EXECUTE format('SELECT count(*) FROM %I.%I', tc.tgt_schema, tc.tgt_table) INTO v_count_before;
+  EXCEPTION WHEN OTHERS THEN
+    v_count_before := 0;
+  END;
+
   CALL etl_antam.pr_log_step(p_run, tc.config_id, 'ROLLBACK_TARGET', 'START',
-       format('rollback data dari %s.%s (order %s)', tc.tgt_schema, tc.tgt_table, tc.exec_order));
+       format('rollback data dari %s.%s (order %s, jumlah sebelum rollback: %s)', tc.tgt_schema, tc.tgt_table, tc.exec_order, v_count_before),
+       NULL, NULL, NULL, NULL, NULL, v_count_before, NULL);
 
   IF tc.rollback_sql IS NOT NULL AND btrim(tc.rollback_sql) <> '' THEN
     EXECUTE tc.rollback_sql;
@@ -1263,9 +1364,19 @@ BEGIN
     GET DIAGNOSTICS v_del = ROW_COUNT;
   END IF;
 
+  -- Hitung count_after pada target table setelah rollback
+  BEGIN
+    EXECUTE format('SELECT count(*) FROM %I.%I', tc.tgt_schema, tc.tgt_table) INTO v_count_after;
+  EXCEPTION WHEN OTHERS THEN
+    v_count_after := 0;
+  END;
+  v_diff := GREATEST(v_count_before - v_count_after, 0);
+
   CALL etl_antam.pr_log_step(p_run, tc.config_id, 'ROLLBACK_TARGET', 'OK',
-       format('berhasil rollback %s baris dari %s.%s', v_del, tc.tgt_schema, tc.tgt_table),
-       NULL, NULL, NULL, NULL, v_del);
+       format('selesai rollback %s.%s: Sebelum=%s, Sesudah=%s, Selisih=-%s baris terhapus (deleted: %s)',
+              tc.tgt_schema, tc.tgt_table, v_count_before, v_count_after, v_diff, v_del),
+       NULL, NULL, NULL, NULL, COALESCE(NULLIF(v_diff, 0), v_del),
+       v_count_before, v_count_after);
   RETURN 0;
 EXCEPTION WHEN OTHERS THEN
   GET STACKED DIAGNOSTICS v_det = PG_EXCEPTION_DETAIL;
@@ -1321,6 +1432,7 @@ DECLARE
   v_del_total bigint := 0;
   v_fail_cnt int := 0;
   v_err_cnt int := 0;
+  v_tbl_cnt int := 0;
 BEGIN
   SELECT count(*) INTO v_fail_cnt
     FROM etl_antam.migration_step_log
@@ -1330,9 +1442,10 @@ BEGIN
     FROM etl_antam.migration_error_log
    WHERE run_id = v_target AND step_name LIKE 'ROLLBACK%';
 
-  SELECT COALESCE(sum(rows_deleted), 0) INTO v_del_total
+  SELECT COALESCE(sum(rows_deleted), 0), count(*)
+    INTO v_del_total, v_tbl_cnt
     FROM etl_antam.migration_step_log
-   WHERE run_id = v_target AND step_name LIKE 'ROLLBACK%';
+   WHERE run_id = v_target AND step_name = 'ROLLBACK_TARGET' AND status = 'OK';
 
   IF v_fail_cnt > 0 OR v_err_cnt > 0 THEN
     UPDATE etl_antam.migration_run
@@ -1346,7 +1459,7 @@ BEGIN
            status = 'SUCCESS',
            is_rolled_back = true,
            rolled_back_at = now(),
-           note = format('wf_rollback selesai: data target berhasil di-rollback. Total %s baris dihapus.', v_del_total)
+           note = format('wf_rollback selesai: data target berhasil di-rollback. Total -%s baris dihapus dari %s target table.', v_del_total, v_tbl_cnt)
      WHERE run_id = v_target;
   END IF;
 END $$;

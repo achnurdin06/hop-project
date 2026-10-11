@@ -257,7 +257,11 @@ Setiap siklus migrasi (mulai dari ekstraksi/staging, posting target, hingga roll
 | `hop_host` | `varchar(100)`| `NULL` | Hostname / environment mesin Apache Hop. |
 | `note` | `text` | `NULL` | Catatan ringkasan eksekusi. |
 | `main_workflow`| `varchar(100)`| `NULL` | Nama workflow utama pembuat sesi (`wf_main.hwf`, `wf_purge_target.hwf`). |
-| `config_id` | `int` | FK `migration_config` | ID konfigurasi tabel yang diproses. |
+| `config_id` | `text` | `NULL` | ID atau daftar ID konfigurasi tabel yang diproses. |
+| `client_id` | `int` | FK `master_client` | ID unik Klien/Tenant yang terkait dengan sesi migrasi. |
+| `env_id` | `int` | FK `master_environment` | ID unik Environment yang terkait dengan sesi migrasi. |
+| `client` | `varchar(100)`| `NULL` | Nama resmi Klien (misal: `PT ANTAM Tbk`). |
+| `environment` | `varchar(50)` | `NULL` | Nama Environment eksekusi (misal: `Development`). |
 | `is_posted` | `boolean` | `DEFAULT false` | Flag apakah data sudah diposting ke tabel target (`wf_post.hwf`). |
 | `posted_at` | `timestamp` | `NULL` | Waktu eksekusi posting ke tabel target. |
 | `post_type` | `varchar(30)` | `NULL` | Mode posting yang digunakan (`BATCH (1000)` atau `DIRECT`). |

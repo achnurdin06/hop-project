@@ -18,6 +18,16 @@
         <default_value/>
         <description>ID atau daftar ID konfigurasi (wajib)</description>
       </parameter>
+      <parameter>
+        <name>CLIENT_CODE</name>
+        <default_value>${CLIENT_CODE}</default_value>
+        <description>Kode Klien Master (contoh: ANTAM)</description>
+      </parameter>
+      <parameter>
+        <name>ENV_CODE</name>
+        <default_value>${ENV_CODE}</default_value>
+        <description>Kode Environment Master (contoh: DEV)</description>
+      </parameter>
     </parameters>
     <capture_transform_performance>N</capture_transform_performance>
     <transform_performance_capturing_delay>1000</transform_performance_capturing_delay>
@@ -47,9 +57,48 @@
       <method>none</method>
       <schema_name/>
     </partitioning>
-    <connection>PG_TGT</connection><sql>WITH ins AS (
-  INSERT INTO etl_antam.migration_run (run_ts, hop_host, main_workflow, config_id)
-  VALUES (
+    <connection>PG_TGT</connection><sql>WITH ref_exact AS (
+  SELECT 
+    c.client_id, c.client_code, c.client_name,
+    e.env_id, e.env_code, e.env_name
+  FROM etl_antam.master_client c
+  JOIN etl_antam.master_environment e ON e.client_id = c.client_id
+  WHERE c.client_code = COALESCE(NULLIF(TRIM(CASE WHEN '${CLIENT_CODE}' LIKE '$%' THEN '' ELSE '${CLIENT_CODE}' END), ''), 'ANTAM')
+    AND e.env_code    = COALESCE(NULLIF(TRIM(CASE WHEN '${ENV_CODE}' LIKE '$%' THEN '' ELSE '${ENV_CODE}' END), ''), 'DEV')
+  ORDER BY e.is_active DESC, e.env_id ASC
+  LIMIT 1
+),
+ref_fallback AS (
+  SELECT 
+    c.client_id, c.client_code, c.client_name,
+    e.env_id, e.env_code, e.env_name
+  FROM etl_antam.master_client c
+  JOIN etl_antam.master_environment e ON e.client_id = c.client_id
+  ORDER BY c.is_active DESC, e.is_active DESC, e.env_id ASC
+  LIMIT 1
+),
+ref_chosen AS (
+  SELECT * FROM ref_exact
+  UNION ALL
+  SELECT * FROM ref_fallback
+  WHERE NOT EXISTS (SELECT 1 FROM ref_exact)
+  LIMIT 1
+),
+ref_final AS (
+  SELECT 
+    rc.client_id,
+    rc.env_id,
+    COALESCE(rc.client_name, 'ANTAM') AS client_name,
+    COALESCE(rc.env_name, 'Development') AS env_name
+  FROM (SELECT 1) dummy
+  LEFT JOIN ref_chosen rc ON true
+),
+ins AS (
+  INSERT INTO etl_antam.migration_run (
+    run_ts, hop_host, main_workflow, config_id,
+    client_id, env_id, client, environment
+  )
+  SELECT
     to_char(now() AT TIME ZONE 'Asia/Jakarta', 'YYYYMMDD_HH24MI'),
     COALESCE(inet_client_addr()::text, 'localhost'),
     CASE 
@@ -63,11 +112,19 @@
         ELSE btrim('${CONFIG_ID}')
       END,
       '\s+', '', 'g'
-    ), '')
-  )
-  RETURNING run_id, run_ts, COALESCE(config_id, '') AS config_id
+    ), ''),
+    rf.client_id,
+    rf.env_id,
+    rf.client_name,
+    rf.env_name
+  FROM ref_final rf
+  RETURNING run_id, run_ts, COALESCE(config_id, '') AS config_id,
+            COALESCE(client_id, 0) AS client_id,
+            COALESCE(env_id, 0) AS env_id,
+            COALESCE(client, '') AS client,
+            COALESCE(environment, '') AS environment
 )
-SELECT run_id, run_ts, config_id FROM ins;</sql><limit>0</limit><lookup/><execute_each_row>N</execute_each_row><variables_active>Y</variables_active><lazy_conversion_active>N</lazy_conversion_active>
+SELECT run_id, run_ts, config_id, client_id, env_id, client, environment FROM ins;</sql><limit>0</limit><lookup/><execute_each_row>N</execute_each_row><variables_active>Y</variables_active><lazy_conversion_active>N</lazy_conversion_active>
     <attributes/>
     <GUI>
       <xloc>100</xloc>
@@ -85,7 +142,15 @@ SELECT run_id, run_ts, config_id FROM ins;</sql><limit>0</limit><lookup/><execut
       <method>none</method>
       <schema_name/>
     </partitioning>
-    <fields><field><field_name>run_id</field_name><variable_name>RUN_ID</variable_name><variable_type>ROOT_WORKFLOW</variable_type><default_value/></field><field><field_name>run_ts</field_name><variable_name>RUN_TS</variable_name><variable_type>ROOT_WORKFLOW</variable_type><default_value/></field><field><field_name>config_id</field_name><variable_name>CONFIG_ID</variable_name><variable_type>ROOT_WORKFLOW</variable_type><default_value/></field></fields><use_formatting>N</use_formatting>
+    <fields>
+      <field><field_name>run_id</field_name><variable_name>RUN_ID</variable_name><variable_type>ROOT_WORKFLOW</variable_type><default_value/></field>
+      <field><field_name>run_ts</field_name><variable_name>RUN_TS</variable_name><variable_type>ROOT_WORKFLOW</variable_type><default_value/></field>
+      <field><field_name>config_id</field_name><variable_name>CONFIG_ID</variable_name><variable_type>ROOT_WORKFLOW</variable_type><default_value/></field>
+      <field><field_name>client_id</field_name><variable_name>CLIENT_ID</variable_name><variable_type>ROOT_WORKFLOW</variable_type><default_value/></field>
+      <field><field_name>env_id</field_name><variable_name>ENV_ID</variable_name><variable_type>ROOT_WORKFLOW</variable_type><default_value/></field>
+      <field><field_name>client</field_name><variable_name>CLIENT</variable_name><variable_type>ROOT_WORKFLOW</variable_type><default_value/></field>
+      <field><field_name>environment</field_name><variable_name>ENVIRONMENT</variable_name><variable_type>ROOT_WORKFLOW</variable_type><default_value/></field>
+    </fields><use_formatting>N</use_formatting>
     <attributes/>
     <GUI>
       <xloc>350</xloc>
