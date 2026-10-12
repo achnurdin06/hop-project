@@ -234,14 +234,16 @@ CREATE TABLE IF NOT EXISTS etl_antam.migration_convert_rule (
 
 -- 1.8 View Aturan Konversi Efektif
 CREATE OR REPLACE VIEW etl_antam.vw_convert_rule AS
-SELECT r.rule_id, r.config_id, r.column_name, r.source_column, r.lookup_name,
-       COALESCE(r.master_schema,  l.master_schema, 'public') AS master_schema,
-       COALESCE(r.master_table,   l.master_table)            AS master_table,
-       COALESCE(r.master_src_col, l.master_src_col)          AS master_src_col,
-       COALESCE(r.master_tgt_col, l.master_tgt_col)          AS master_tgt_col,
-       COALESCE(r.master_filter,  l.master_filter)           AS master_filter,
-       COALESCE(r.on_unmapped,    l.on_unmapped, 'FAIL')     AS on_unmapped,
-       COALESCE(r.default_value,  l.default_value)           AS default_value,
+SELECT r.rule_id, r.config_id, r.column_name, 
+       NULLIF(btrim(r.source_column), '') AS source_column, 
+       r.lookup_name,
+       COALESCE(NULLIF(btrim(r.master_schema), ''),  NULLIF(btrim(l.master_schema), ''), 'public') AS master_schema,
+       COALESCE(NULLIF(btrim(r.master_table), ''),   NULLIF(btrim(l.master_table), ''))            AS master_table,
+       COALESCE(NULLIF(btrim(r.master_src_col), ''), NULLIF(btrim(l.master_src_col), ''))          AS master_src_col,
+       COALESCE(NULLIF(btrim(r.master_tgt_col), ''), NULLIF(btrim(l.master_tgt_col), ''))          AS master_tgt_col,
+       COALESCE(NULLIF(btrim(r.master_filter), ''),  NULLIF(btrim(l.master_filter), ''))           AS master_filter,
+       COALESCE(NULLIF(btrim(r.on_unmapped), ''),    NULLIF(btrim(l.on_unmapped), ''), 'FAIL')     AS on_unmapped,
+       COALESCE(NULLIF(btrim(r.default_value), ''),  NULLIF(btrim(l.default_value), ''))           AS default_value,
        COALESCE(r.normalize,      l.normalize, true)         AS normalize
   FROM etl_antam.migration_convert_rule r
   LEFT JOIN etl_antam.migration_lookup l ON l.lookup_name = r.lookup_name
@@ -594,7 +596,7 @@ BEGIN
   END IF;
 
   FOR r IN SELECT * FROM etl_antam.vw_convert_rule WHERE config_id = p_cfg LOOP
-    v_src := COALESCE(r.source_column, r.column_name);
+    v_src := COALESCE(NULLIF(btrim(r.source_column), ''), r.column_name);
     EXECUTE format('ALTER TABLE stg_antam.%I ALTER COLUMN %I DROP DEFAULT', v_stg_tbl, r.column_name);
     IF v_src = r.column_name THEN
       EXECUTE format('ALTER TABLE stg_antam.%I ALTER COLUMN %I TYPE text USING %I::text',
@@ -629,10 +631,10 @@ BEGIN
   v_stg_tbl := CASE WHEN c.stg_table LIKE '%_src' THEN c.stg_table ELSE c.stg_table || '_src' END;
 
   FOR r IN SELECT * FROM etl_antam.vw_convert_rule WHERE config_id = p_cfg ORDER BY rule_id LOOP
-    v_src := COALESCE(r.source_column, r.column_name);
+    v_src := COALESCE(NULLIF(btrim(r.source_column), ''), r.column_name);
     v_ms  := CASE WHEN r.normalize THEN format('upper(btrim(m.%I::text))', r.master_src_col) ELSE format('m.%I::text', r.master_src_col) END;
     v_ss  := CASE WHEN r.normalize THEN format('upper(btrim(s.%I::text))', v_src) ELSE format('s.%I::text', v_src) END;
-    v_mf  := CASE WHEN r.master_filter IS NOT NULL THEN ' AND (' || r.master_filter || ')' ELSE '' END;
+    v_mf  := CASE WHEN r.master_filter IS NOT NULL AND btrim(r.master_filter) <> '' THEN ' AND (' || r.master_filter || ')' ELSE '' END;
 
     IF r.on_unmapped = 'FAIL' THEN
       v_from := format('stg_antam.%I s LEFT JOIN %I.%I m ON %s = %s%s WHERE s.%I IS NOT NULL AND m.%I IS NULL',
@@ -659,10 +661,10 @@ BEGIN
   END IF;
 
   FOR r IN SELECT * FROM etl_antam.vw_convert_rule WHERE config_id = p_cfg ORDER BY rule_id LOOP
-    v_src := COALESCE(r.source_column, r.column_name);
+    v_src := COALESCE(NULLIF(btrim(r.source_column), ''), r.column_name);
     v_ms  := CASE WHEN r.normalize THEN format('upper(btrim(m.%I::text))', r.master_src_col) ELSE format('m.%I::text', r.master_src_col) END;
     v_ss2 := CASE WHEN r.normalize THEN format('upper(btrim(s2.%I::text))', v_src) ELSE format('s2.%I::text', v_src) END;
-    v_mf  := CASE WHEN r.master_filter IS NOT NULL THEN ' AND (' || r.master_filter || ')' ELSE '' END;
+    v_mf  := CASE WHEN r.master_filter IS NOT NULL AND btrim(r.master_filter) <> '' THEN ' AND (' || r.master_filter || ')' ELSE '' END;
     v_fb  := CASE WHEN r.on_unmapped = 'DEFAULT' THEN quote_nullable(r.default_value) ELSE 'NULL' END;
 
     IF v_src = r.column_name THEN
