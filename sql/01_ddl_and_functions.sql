@@ -43,6 +43,25 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+-- Interoperabilitas Boolean untuk SQL Server (bit/int/bigint 0/1 -> boolean)
+CREATE OR REPLACE FUNCTION etl_antam.fn_int8_to_bool(bigint) RETURNS boolean AS '
+  SELECT CASE WHEN $1 = 0 THEN false ELSE true END;
+' LANGUAGE sql IMMUTABLE STRICT;
+
+CREATE OR REPLACE FUNCTION etl_antam.fn_int4_to_bool(integer) RETURNS boolean AS '
+  SELECT CASE WHEN $1 = 0 THEN false ELSE true END;
+' LANGUAGE sql IMMUTABLE STRICT;
+
+DO $$ BEGIN
+  CREATE CAST (bigint AS boolean) WITH FUNCTION etl_antam.fn_int8_to_bool(bigint) AS ASSIGNMENT;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  UPDATE pg_cast SET castcontext = 'a' WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
 -- =====================================================================
 -- [SECTION 1] TABEL METADATA, KONFIGURASI & LOGGING
 -- =====================================================================
@@ -839,7 +858,7 @@ BEGIN
 
     SELECT COALESCE(sum(rows_new), 0) INTO v_total_posted
       FROM etl_antam.migration_step_log
-     WHERE run_id = p_run AND step_name = 'POST_TARGET' AND status = 'OK' AND rows_new IS NOT NULL;
+     WHERE run_id = p_run AND step_name = 'POST_TARGET' AND status = 'OK' AND rows_before IS NOT NULL;
 
     SELECT string_agg(format('%s (+%s)', regexp_replace(message, '.*selesai post ke ([^ ]+).*', '\1'), rows_new), ', ')
       INTO v_summary_det
